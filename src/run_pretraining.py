@@ -2,6 +2,7 @@
 # This file is based on https://github.com/google-research/bert/blob/master/run_pretraining.py.
 # It is changed to read model parameters from config.ini.
 """Run masked LM/next sentence masked_lm pre-training for BERT."""
+"""TPU using GKE"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -64,30 +65,6 @@ flags.DEFINE_integer(
 
 flags.DEFINE_bool("do_train", False, "Whether to run training.")
 
-flags.DEFINE_bool("do_eval", False, "Whether to run eval on the dev set.")
-
-flags.DEFINE_integer("train_batch_size", 32, "Total batch size for training.")
-
-flags.DEFINE_integer("eval_batch_size", 8, "Total batch size for eval.")
-
-flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
-
-flags.DEFINE_integer("num_train_steps", 100000, "Number of training steps.")
-
-flags.DEFINE_integer("num_warmup_steps", 10000, "Number of warmup steps.")
-
-flags.DEFINE_integer("save_checkpoints_steps", 1000,
-                     "How often to save the model checkpoint.")
-
-flags.DEFINE_integer("iterations_per_loop", 1000,
-                     "How many steps to make in each estimator call.")
-
-flags.DEFINE_integer("max_eval_steps", 100, "Maximum number of eval steps.")
-
-flags.DEFINE_bool("use_tpu", False, "Whether to use TPU or GPU/CPU.")
-
-tf.flags.DEFINE_string(
-    "tpu_name", None,
     "The Cloud TPU to use for training. This should be either the name "
     "used when creating the Cloud TPU, or a grpc://ip.address.of.tpu:8470 "
     "url.")
@@ -410,6 +387,8 @@ def _decode_record(record, name_to_features):
   return example
 
 
+# 非常にシンプルできれいなコード
+# 実装者の技量がわかりみ...
 def main(_):
   tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -428,10 +407,14 @@ def main(_):
   for input_file in input_files:
     tf.logging.info("  %s" % input_file)
 
+  # 2019.12.05 TPU 用のパッチ
+  # https://www.tensorflow.org/api_docs/python/tf/distribute/cluster_resolver/TPUClusterResolver
+  # ロジックを修正する。tpu_name をgkeから取得するようにする
+  # https://github.com/tensorflow/tensorflow/blob/r2.0/tensorflow/python/distribute/cluster_resolver/tpu_cluster_resolver.py#L257
   tpu_cluster_resolver = None
-  if FLAGS.use_tpu and FLAGS.tpu_name:
-    tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(
-        FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
+  if FLAGS.use_tpu:
+    tpu_naem = FLAGS.tpu_name if FLAGS.tpu_name is not None else None
+    tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
 
   is_per_host = tf.contrib.tpu.InputPipelineConfig.PER_HOST_V2
   run_config = tf.contrib.tpu.RunConfig(
