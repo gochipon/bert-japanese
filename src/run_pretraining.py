@@ -65,6 +65,30 @@ flags.DEFINE_integer(
 
 flags.DEFINE_bool("do_train", False, "Whether to run training.")
 
+flags.DEFINE_bool("do_eval", False, "Whether to run eval on the dev set.")
+
+flags.DEFINE_integer("train_batch_size", 32, "Total batch size for training.")
+
+flags.DEFINE_integer("eval_batch_size", 8, "Total batch size for eval.")
+
+flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
+
+flags.DEFINE_integer("num_train_steps", 100000, "Number of training steps.")
+
+flags.DEFINE_integer("num_warmup_steps", 10000, "Number of warmup steps.")
+
+flags.DEFINE_integer("save_checkpoints_steps", 1000,
+                     "How often to save the model checkpoint.")
+
+flags.DEFINE_integer("iterations_per_loop", 1000,
+                     "How many steps to make in each estimator call.")
+
+flags.DEFINE_integer("max_eval_steps", 100, "Maximum number of eval steps.")
+
+flags.DEFINE_bool("use_tpu", False, "Whether to use TPU or GPU/CPU.")
+
+tf.flags.DEFINE_string(
+    "tpu_name", None,
     "The Cloud TPU to use for training. This should be either the name "
     "used when creating the Cloud TPU, or a grpc://ip.address.of.tpu:8470 "
     "url.")
@@ -159,12 +183,10 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu)
 
-      logging_hook = tf.train.LoggingTensorHook({"loss": total_loss}, every_n_iter=10)
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
           loss=total_loss,
           train_op=train_op,
-          training_hooks=[logging_hook],
           scaffold_fn=scaffold_fn)
     elif mode == tf.estimator.ModeKeys.EVAL:
 
@@ -387,8 +409,6 @@ def _decode_record(record, name_to_features):
   return example
 
 
-# 非常にシンプルできれいなコード
-# 実装者の技量がわかりみ...
 def main(_):
   tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -407,13 +427,12 @@ def main(_):
   for input_file in input_files:
     tf.logging.info("  %s" % input_file)
 
-  # 2019.12.05 TPU 用のパッチ
-  # https://www.tensorflow.org/api_docs/python/tf/distribute/cluster_resolver/TPUClusterResolver
-  # ロジックを修正する。tpu_name をgkeから取得するようにする
-  # https://github.com/tensorflow/tensorflow/blob/r2.0/tensorflow/python/distribute/cluster_resolver/tpu_cluster_resolver.py#L257
   tpu_cluster_resolver = None
+  # 2019.12.05 patch
+  # https://www.tensorflow.org/api_docs/python/tf/distribute/cluster_resolver/TPUClusterResolver
+  # https://github.com/tensorflow/tensorflow/blob/r2.0/tensorflow/python/distribute/cluster_resolver/tpu_cluster_resolver.py#L257
   if FLAGS.use_tpu:
-    tpu_naem = FLAGS.tpu_name if FLAGS.tpu_name is not None else None
+    tpu_name = FLAGS.tpu_name if FLAGS.tpu_name is not None else None
     tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
 
   is_per_host = tf.contrib.tpu.InputPipelineConfig.PER_HOST_V2

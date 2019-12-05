@@ -2,6 +2,7 @@
 # This file is based on https://github.com/google-research/bert/blob/master/run_classifier.py.
 # It is changed to use SentencePiece tokenizer and https://www.rondhuit.com/download/ldcc-20140209.tar.gz.
 """BERT finetuning runner."""
+"""TPU using GKE"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -548,6 +549,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu)
+
       logging_hook = tf.train.LoggingTensorHook({"loss": total_loss}, every_n_iter=10)
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
@@ -694,9 +696,12 @@ def main(_):
       do_lower_case=FLAGS.do_lower_case)
 
   tpu_cluster_resolver = None
-  if FLAGS.use_tpu and FLAGS.tpu_name:
-    tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(
-        FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
+  # patch 2019.12.05
+  # https://www.tensorflow.org/api_docs/python/tf/distribute/cluster_resolver/TPUClusterResolver
+  # https://github.com/tensorflow/tensorflow/blob/r2.0/tensorflow/python/distribute/cluster_resolver/tpu_cluster_resolver.py#L257
+  if FLAGS.use_tpu:
+    tpu_name = FLAGS.tpu_name if FLAGS.tpu_name is not None else None
+    tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
 
   is_per_host = tf.contrib.tpu.InputPipelineConfig.PER_HOST_V2
   run_config = tf.contrib.tpu.RunConfig(
